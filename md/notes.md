@@ -18,7 +18,7 @@
 
 （项目下有很多包：React、react-dom、react-reconciler，要同时管理，**所以选用Mono-repo**）
 
-## 工具
+## 管理工具
 
 ### pnpm
 
@@ -238,13 +238,51 @@ module.exports = {
 npx husky add .husky/commit-msg "npx --no-install commitlint -e $HUSKY_GIT_PARAMS"
 ```
 
+![image-20230501230515569](https://forupload.oss-cn-guangzhou.aliyuncs.com/newImg/image-20230501230515569.png)
 
 
 
+### typescript配置
 
+创建`tsconfig.json`
 
+```json
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "moduleResolution": "Node",
+    "strict": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": false,
+    "skipLibCheck": true,
+    "baseUrl": "./packages"
+  }
+}
+```
 
+## 打包工具
 
+权威网站：`bundlers.tooling.report`对比不同打包工具在不同场景下的优劣的。
 
+webpack大而全，但是这个项目不需要，所以使用rollup
 
+配置上更简洁，打包出来的产物，可读性更高。
+
+安装
+
+```css
+pnpm i -D -w rollup
+```
+
+新建script/rollup目录，放对应配置脚本
 
