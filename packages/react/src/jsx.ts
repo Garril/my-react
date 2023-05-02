@@ -1,4 +1,4 @@
-import { REACT_ELEMENT_TYPE } from "shared/ReactSymbols";
+import { REACT_ELEMENT_TYPE } from 'shared/ReactSymbols';
 import {
   Type,
   Key,
@@ -6,7 +6,7 @@ import {
   Props,
   ReactElementType,
   ElementType
-} from "shared/ReactTypes";
+} from 'shared/ReactTypes';
 // ReactElement构造函数
 const ReactElement = function (
   type: Type,
@@ -21,7 +21,7 @@ const ReactElement = function (
     key,
     ref,
     props,
-    __mark: "garril"
+    __mark: 'garril'
   };
   return element;
 };
@@ -40,13 +40,13 @@ export const jsx = (type: ElementType, config: any, ...maybeChildren: any) => {
   for (const prop in config) {
     const val = config[prop];
     // key 和 ref要先单独处理
-    if (prop === "key") {
+    if (prop === 'key') {
       if (val !== undefined) {
-        key = "" + val;
+        key = '' + val;
       }
       continue;
     }
-    if (prop === "ref") {
+    if (prop === 'ref') {
       if (val !== undefined) {
         ref = val;
       }
@@ -70,6 +70,32 @@ export const jsx = (type: ElementType, config: any, ...maybeChildren: any) => {
   }
   return ReactElement(type, key, ref, props);
 };
-// 实际上生产环境（jsx） 和 开发环境（jsxDEV）是不同的实现
+// 生产环境（jsx） 和 开发环境（jsxDEV）是不同的实现
 // 开发多了很多额外的检查
-export const jsxDEV = jsx;
+export const jsxDEV = (type: ElementType, config: any) => {
+  let key: Key = null;
+  const props: Props = {};
+  let ref: Ref = null;
+  for (const prop in config) {
+    const val = config[prop];
+    // key 和 ref要先单独处理
+    if (prop === 'key') {
+      if (val !== undefined) {
+        key = '' + val;
+      }
+      continue;
+    }
+    if (prop === 'ref') {
+      if (val !== undefined) {
+        ref = val;
+      }
+      continue;
+    }
+    // props
+    // 判断是自己的prop，而不是原型上的
+    if ({}.hasOwnProperty.call(config, prop)) {
+      props[prop] = val;
+    }
+  }
+  return ReactElement(type, key, ref, props);
+};

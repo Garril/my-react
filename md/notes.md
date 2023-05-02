@@ -191,3 +191,127 @@ npm install -g rimraf
 pnpm i -D -w rollup-plugin-generate-package-json
 ```
 
+修改上面react包部分
+
+```json
+import generatePackageJson from 'rollup-plugin-generate-package-json';
+.....
+	// react包
+  {
+    input: `${packagePath}/${module}`,
+    output: {
+      file: `${packageDistPath}/index.js`,
+      name: 'index.js',
+      format: 'umd'
+    },
+    plugins: [...getBaseRollupPlugins(), generatePackageJson({
+      inputFolder: packagePath,
+      outputFolder: packageDistPath,
+      baseContents: ({
+        name,
+        description,
+        version
+      }) => ({
+        // 我们不希望打包后的package.json和react包中的一样，所以要有选择的生成
+        // main字段：输出产物的入口。看上面输出格式umd，支持commonjs所以main字段
+        name,
+        description,
+        version,
+        main: "index.js"
+      })
+    })]
+  },
+```
+
+### 调试
+
+我们打包后，生成了 `dist/node_module/react/。。。`的3个js文件一个json文件（这些就是我们的react包）
+
+进入dist/node_module/react路径，执行
+
+```css
+pnpm link --global
+```
+
+执行后，全局node_modules下的react包就指向我们刚刚生成的react包
+
+之后我们通过create-react-app，在项目之外的目录下，创建一个新的demo项目，
+
+```css
+npx create-react-app react-demo
+cd react-demo
+npm start
+
+code .
+```
+
+在项目中删除不必要的代码
+
+```jsx
+// index.js文件
+import React from 'react';
+
+const jsx = <div>hello <span>my-react</span></div>
+console.log(React)
+console.log(jsx)
+```
+
+再执行
+
+```css
+pnpm link react --global
+```
+
+就能将demo项目中依赖的react，从项目的node_module下的react，变成我们全局node_module下的react
+
+```css
+npm start
+```
+
+会发现跑起来的程序，输出的是我们定义的React、进过我们转换的jsx，但是jsx的children会发现不对。
+
+原因是我们之前jsx和jsxDEV是一样的，在my-react项目做以下修改：
+
+```ts
+// jsx.ts
+export const jsxDEV = (type: ElementType, config: any) => {
+  let key: Key = null;
+  const props: Props = {};
+  let ref: Ref = null;
+  for (const prop in config) {
+    const val = config[prop];
+    // key 和 ref要先单独处理
+    if (prop === 'key') {
+      if (val !== undefined) {
+        key = '' + val;
+      }
+      continue;
+    }
+    if (prop === 'ref') {
+      if (val !== undefined) {
+        ref = val;
+      }
+      continue;
+    }
+    // props
+    // 判断是自己的prop，而不是原型上的
+    if ({}.hasOwnProperty.call(config, prop)) {
+      props[prop] = val;
+    }
+  }
+  return ReactElement(type, key, ref, props);
+};
+
+
+
+// react包的index.ts
+import { jsxDEV } from './src/jsx';
+
+export default {
+  version: '0.0.0',
+  createElement: jsxDEV
+};
+```
+
+修改后要重新打包，然后在demo项目重新start，略为繁琐（后续配置热更新）
+
