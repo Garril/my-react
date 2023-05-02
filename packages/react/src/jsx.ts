@@ -4,8 +4,8 @@ import {
   Key,
   Ref,
   Props,
-  ReactElement,
-  ElementType,
+  ReactElementType,
+  ElementType
 } from "shared/ReactTypes";
 // ReactElement构造函数
 const ReactElement = function (
@@ -13,7 +13,7 @@ const ReactElement = function (
   key: Key,
   ref: Ref,
   props: Props
-): ReactElement {
+): ReactElementType {
   const element = {
     // 判断当前字段是一个ReactElement
     $$typeof: REACT_ELEMENT_TYPE,
@@ -21,7 +21,7 @@ const ReactElement = function (
     key,
     ref,
     props,
-    __mark: "garril",
+    __mark: "garril"
   };
   return element;
 };

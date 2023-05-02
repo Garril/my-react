@@ -74,5 +74,120 @@ import { jsx as _jsx } from "react/jsx-runtime";
 
 3、实现调试打包结果的环境
 
+### rollup打包plugin
 
+两个plugin，一个commonjs规范的，一个ts转js的
+
+```css
+pnpm i -D -w rollup-plugin-typescript2
+pnpm i -D -w @rollup/plugin-commonjs
+```
+
+目前实现打包出3个文件，react包的index.js以及 jsx-runtime和jsx-dev-runtime（后面连个暂时一样）
+
+#### utils
+
+```js
+import path from 'path';
+import fs from 'fs';
+
+import ts from 'rollup-plugin-typescript2';
+import cjs from '@rollup/plugin-commonjs';
+
+const packagePath = path.resolve(__dirname, '../../packages');
+const distPath = path.resolve(__dirname, '../../dist/node_modules');
+// 包路径获取（两种：源码的路径、打包后的路径）
+export function resolvePackagePath(packageName, isDist) {
+  if (isDist) {
+    return `${distPath}/${packageName}`;
+  }
+  return `${packagePath}/${packageName}`;
+}
+
+export function getPackageJson(packageName) {
+  // 包路径
+  const path = `${resolvePackagePath(packageName)}/package.json`;
+  const str = fs.readFileSync(path, {
+    encoding: 'utf-8'
+  });
+  return JSON.parse(str);
+}
+
+export function getBaseRollupPlugins({
+  typescript = {}
+} = {}) {
+  // 目前需要两个rollup的plugin
+  // 1：解析commonJS规范的plugin
+  // 2: 将源码中ts转为js的plugin
+  return [cjs(), ts(typescript)];
+}
+```
+
+#### react.config.js
+
+```js
+import {
+  getPackageJson,
+  resolvePackagePath,
+  getBaseRollupPlugins
+} from './utils';
+// 拿到packages/react包下package.json的name,module
+const {
+  name,
+  module
+} = getPackageJson('react');
+// react包的路径
+const packagePath = resolvePackagePath(name);
+// react包产物的路径
+const packageDistPath = resolvePackagePath(name, true);
+export default [
+  // react包
+  {
+    input: `${packagePath}/${module}`,
+    output: {
+      file: `${packageDistPath}/index.js`,
+      name: 'index.js',
+      format: 'umd'
+    },
+    plugins: getBaseRollupPlugins()
+  },
+  // jsx-runtime包
+  {
+    input: `${packagePath}/src/jsx.ts`,
+    output: [
+      // jsx-runtime
+      {
+        file: `${packageDistPath}/jsx-runtime.js`,
+        name: 'jsx-runtime.js',
+        format: 'umd'
+      },
+      // jsx-dev-runtime
+      {
+        file: `${packageDistPath}/jsx-dev-runtime.js`,
+        name: 'jsx-dev-runtime.js',
+        format: 'umd'
+      }
+    ],
+    plugins: getBaseRollupPlugins()
+  }
+];
+```
+
+执行命令
+
+```json
+"build:dev": "rimraf dist && rollup --bundleConfigAsCjs --config scripts/rollup/react.config.js"
+```
+
+如果没有安装rimraf
+
+```css
+npm install -g rimraf
+```
+
+生成了3个js文件，但是没有json文件，需要一个rollup插件
+
+```css
+pnpm i -D -w rollup-plugin-generate-package-json
+```
 
