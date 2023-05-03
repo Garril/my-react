@@ -23,6 +23,8 @@ export interface UpdateQueue<State> {
   };
 }
 export const createUpdateQueue = <Action>() => {
+  // 这个return的结构 （看fiber.ts的createWorkInProgress方法）
+  // 可以让 workInProgress的fiber和 current的fiber同用一个updateQueue
   return {
     shared: {
       pending: null

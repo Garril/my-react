@@ -1,6 +1,7 @@
 import { Props, Key, Ref } from 'shared/ReactTypes';
 import { WorkTag } from './workTags';
 import { Flags, NoFlags } from './fiberFlags';
+import { Container } from 'hostConfig';
 
 export class FiberNode {
   tag: WorkTag;
@@ -9,6 +10,7 @@ export class FiberNode {
   type: any;
   pendingProps: Props;
   memorizedProps: Props | null;
+  memorizedState: any;
   ref: Ref;
 
   return: FiberNode | null;
@@ -18,6 +20,8 @@ export class FiberNode {
 
   alternate: FiberNode | null;
   flags: Flags;
+
+  updateQueue: unknown;
 
   constructor(tag: WorkTag, pendingProps: Props, key: Key) {
     //实例的属性
@@ -39,6 +43,9 @@ export class FiberNode {
     // 作为工作单元
     this.pendingProps = pendingProps; // 工作单元刚开始准备工作时，props是什么
     this.memorizedProps = null; // 工作玩后，props是什么
+    this.memorizedState = null; // 工作玩后，state是什么
+    this.updateQueue = null;
+
     // 比如说当前的fiberNode是current，他的alternate就指向workInProgress
     // 如果是workInProgress的fiberNode，他的alternate就指向current
     this.alternate = null;
@@ -46,3 +53,50 @@ export class FiberNode {
     this.flags = NoFlags;
   }
 }
+
+export class FiberRootNode {
+  /* container保存了宿主环境，挂载的节点
+    比如: ReactDOM.createRoot( rootElement ).render(<App/>)
+    container:就是保存的rootElement的节点，但是不能直接设置为 DOM-Element
+    因为其他宿主环境，可能没有 DOM-Element，所以要抽象一个类型Container
+    这里的 Container是import在tsconfig.json的paths配置，不是import相对路径的
+    (流程看markdown中的reconciler -- 触发更新 -- 结构流程)
+  */
+  container: Container;
+  current: FiberNode;
+  finishedWork: FiberNode | null;
+  constructor(container: Container, hostRootFiber: FiberNode) {
+    this.container = container;
+    this.current = hostRootFiber;
+    hostRootFiber.stateNode = this;
+    this.finishedWork = null;
+  }
+}
+// FiberRootNode创建workInProgress
+export const createWorkInProgress = (
+  current: FiberNode,
+  pendingProps: Props
+): FiberNode => {
+  let workInProgress = current.alternate;
+  if (workInProgress === null) {
+    // 首屏渲染，workInProgress是null
+    // mount
+    workInProgress = new FiberNode(current.tag, pendingProps, current.key);
+    workInProgress.stateNode = current.stateNode;
+
+    workInProgress.alternate = current;
+    current.alternate = workInProgress;
+  } else {
+    // update
+    workInProgress.pendingProps = pendingProps;
+    // 清除副作用
+    workInProgress.flags = NoFlags;
+  }
+  workInProgress.type = current.type;
+  workInProgress.updateQueue = current.updateQueue;
+  workInProgress.child = current.child;
+  workInProgress.memorizedProps = current.memorizedProps;
+  workInProgress.memorizedState = current.memorizedState;
+
+  return workInProgress;
+};
