@@ -676,3 +676,265 @@ ReactDOM.createRoot( rootElement ).render(<App/>)
 更新可以是任意的组件，而更新流程是从根节点递归的
 
 需要一个统一的根节点保存通用信息
+
+
+
+## 更新流程的目的
+
+1、生成`wip fiberNode` 树
+
+2、标记副作用`flags`
+
+更新流程的步骤：
+
+1、递： `beginWork`
+
+2、归： `completeWork`
+
+### beginWork
+
+```html
+<A>
+  <B/>
+</A>
+```
+
+当进入A组件的`beginWork`时，通过对比`B current fiberNode  `与 `B reactElement `，生成`B 对应的 `wip fiberNode`。
+
+（`wip：workInProgress`的缩写）
+
+在此过程中，最多会标记2类，与 [结构变化] 相关的flags：
+
+`Placement`
+
+​		插入： a -> ab   移动： abc -> bca
+
+​		（插入：标记 b。移动：标记a。）
+
+`ChildDeletion`
+
+​		 删除：ul>li * 3  -> ul>li * 1
+
+不包含与 [属性变化] 相关的 flag：
+
+​		`Update`：<img title="xxx1"/>  ->  <img title="yyy2"/>  ->  
+
+#### 实现前准备`(__DEV__)`
+
+在实现beginWork之前，先为开发环境，添加 `__DEV__`标识，方便 Dev包打印更多信息：
+
+```css
+pnpm i -d -w @rollup/plugin-replace
+```
+
+在 `scripts\rollup\utils.js`中添加
+
+```js
+import replace from '@rollup/plugin-replace';
+
+export function getBaseRollupPlugins({
+  alias = {
+    __DEV__: true
+  },
+  typescript = {}
+} = {}) {
+  // 目前需要两个rollup的plugin
+  // 1：解析commonJS规范的plugin
+  // 2: 将源码中ts转为js的plugin
+  return [replace(alias), cjs(), ts(typescript)];
+}
+```
+
+作用是什么？
+
+比如在react-reconciler包中的renderRoot函数中：
+
+```ts
+do {
+  try {
+    workLoop();
+    break;
+  } catch(e) {
+    console.warn('workLoop发生错误',e);
+  }
+} while(true);
+```
+
+我们不希望输出的报错，在生产环境的包出现
+
+```ts
+do {
+  try {
+    workLoop();
+    break;
+  } catch(e) {
+    if(__DEV__) {
+      console.warn('workLoop发生错误',e);
+    }
+  }
+} while(true);
+```
+
+这样，就只会在开发环境下，打印错误信息。
+
+不过在对应js文件中使用`__DEV__`需要声明
+
+在`react-reconciler`包中`src`下创建`reconciler.d.ts`
+
+`reconciler.d.ts`文件内容：
+
+```ts
+declare let __DEV__: boolean;
+```
+
+
+
+#### updateHostRoot
+
+reconciler包src下，beginWork.ts
+
+```ts
+function updateHostRoot(wip: FiberNode) {
+  // 1、计算新状态值
+  const baseState = wip.memorizedState;
+  const updateQueue = wip.updateQueue as UpdateQueue<Element>;
+  const pending = updateQueue.shared.pending;
+  updateQueue.shared.pending = null;
+  const { memorizedState } = processUpdateQueue(baseState, pending!);
+  /* 当前 hostRootFiber 最新的状态 */
+  wip.memorizedState = memorizedState;
+  // 2、创建子fiberNode，即：创建B对应的wip fiberNode
+  // （由 B的current FiberNode 和 react Element比对产生）
+  // react Element -- wip.memorizedState
+  // current FiberNode -- wip.alternate?.child
+
+  const nextChildren = wip.memorizedState;
+  reconcileChildren(wip, nextChildren);
+  return wip.child;
+}
+```
+
+
+
+#### updateHostComponent
+
+reconciler包src下，beginWork.ts
+
+```ts
+function updateHostComponent(wip: FiberNode) {
+  /* 
+  与updateHostRoot的区别是：
+    updateHostComponent中是没办法触发更新的，没有更新的过程
+    流程就一步，创建子fiberNode
+  例子：
+    <div><span/></div>
+    span节点对应的react Element在 div对应react Element的children中
+    而children又在props中，所以：
+  */
+  const nextProps = wip.pendingProps;
+  const nextChildren = nextProps.children;
+  reconcileChildren(wip, nextChildren);
+  return wip.child;
+}
+```
+
+
+
+#### updateHostText
+
+```css
+HostText没有beginWork工作流程，因为他没有子节点
+例子：
+	<p>content</p>
+	content的文本节点对应的fiberNode，就是HostText类型的fiberNode
+```
+
+
+
+#### 性能优化
+
+在实现上面的`reconcileChildren`之前，先看看优化
+
+```html
+<div>
+  <p>p-content</p>
+  <span>span-content</span>
+</div>
+```
+
+理论上，mount流程完毕后，包含的flags：
+
+```css
+span-content Placement
+span Placement
+
+p-content Placement
+p Placement
+
+div Placement
+```
+
+需要执行5次，Placement操作。
+
+优化的策略就是：我们先构建好一颗 [离屏`DOM`树] 后(这颗树的根节点就是这里的`div`节点，内部结构已经提前构建好了)，只需要对 `div` 执行 1 次` Placement`的操作，就可以把整颗树插入到DOM中。
+
+
+
+#### reconcileChildren
+
+beginWork.ts
+
+```ts
+function reconcileChildren(wip: FiberNode, children?: ReactElementType) {
+  // 获取父节点的current FiberNode
+  const current = wip.alternate;
+  // 生成子节点 wip FiberNode
+  if (current !== null) {
+    // update流程
+    wip.child = reconcileChildFibers(wip, current?.child, children);
+  } else {
+    // mount流程
+    wip.child = mountChildFibers(wip, null, children);
+  }
+}
+```
+
+childFibers.ts
+
+```ts
+// shouldTrackEffects: 是否追踪副作用
+// （不追踪的话，就不标记那些Placement的flags了）
+function ChildReconciler(shouldTrackEffects: boolean) {
+  /* 
+    设计为闭包形式，因为需要根据shouldTrackEffects返回不同reconcileChildFibers的实现
+    只有在mount流程，才会存在插入大量dom节点，而在update，只存在局部更新。
+  */
+  return function reconcileChildFibers(
+    returnFiber: FiberNode,
+    currentFiber: null,
+    newChild?: ReactElementType
+  ) {
+    /* 
+      returnFiber: 父亲fiberNode,
+      currentFiber: 当前的子节点的current FiberNode,
+      newChild?: 子节点的react Element
+    */
+    // return FiberNode
+  };
+}
+export const reconcileChildFibers = ChildReconciler(true);
+export const mountChildFibers = ChildReconciler(false);
+```
+
+到了这一步，理一下，有个问题
+
+我们在`moun`阶段，设置为了`false`，就代表着我们的`fiberNode`不会被打上`flags`，那么第一次更新的那唯一一次`Placement`，怎么来的。
+
+看`workLoop.ts`的函数`prepareFreshStack`
+
+首屏渲染，有一个节点（也就是我们的根节点），同时存在 hostRootFiber 和 workInProgress。
+
+我们挂载的组件树的所有wip fiber都会走mount的逻辑
+
+而对于hostRootFiber，就会去走update的逻辑（在这里被打上flags。执行一次dom插入，完成渲染）
+

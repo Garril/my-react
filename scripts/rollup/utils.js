@@ -3,6 +3,7 @@ import fs from 'fs';
 
 import ts from 'rollup-plugin-typescript2';
 import cjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
 
 const packagePath = path.resolve(__dirname, '../../packages');
 const distPath = path.resolve(__dirname, '../../dist/node_modules');
@@ -24,10 +25,13 @@ export function getPackageJson(packageName) {
 }
 
 export function getBaseRollupPlugins({
+  alias = {
+    __DEV__: true
+  },
   typescript = {}
 } = {}) {
   // 目前需要两个rollup的plugin
   // 1：解析commonJS规范的plugin
   // 2: 将源码中ts转为js的plugin
-  return [cjs(), ts(typescript)];
+  return [replace(alias), cjs(), ts(typescript)];
 }

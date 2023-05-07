@@ -54,7 +54,9 @@ function renderRoot(root: FiberRootNode) {
       workLoop();
       break;
     } catch (e) {
-      console.warn('renderRoot--error: ', e);
+      if(__DEV__) {
+        console.warn('renderRoot--error: ', e);
+      }
       workInProgress = null;
     }
   } while (true);

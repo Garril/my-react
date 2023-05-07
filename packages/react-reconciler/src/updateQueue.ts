@@ -22,29 +22,31 @@ export interface UpdateQueue<State> {
     pending: Update<State> | null;
   };
 }
-export const createUpdateQueue = <Action>() => {
+export const createUpdateQueue = <State>() => {
   // 这个return的结构 （看fiber.ts的createWorkInProgress方法）
   // 可以让 workInProgress的fiber和 current的fiber同用一个updateQueue
   return {
     shared: {
       pending: null
     }
-  } as UpdateQueue<Action>;
+  } as UpdateQueue<State>;
 };
 
 // 将update插入到updateQueue中的方法
-export const enqueueUpdate = <Action>(
-  updateQueue: UpdateQueue<Action>,
-  update: Update<Action>
+export const enqueueUpdate = <State>(
+  updateQueue: UpdateQueue<State>,
+  update: Update<State>
 ) => {
   updateQueue.shared.pending = update;
 };
 
-// 消费update的方法
+// 消费update的方法 （计算状态的最新值）
 export const processUpdateQueue = <State>(
+  // 接受基础的state和参与计算的update
   baseState: State,
-  pendingUpdate: Update<State>
+  pendingUpdate: Update<State> | null
 ): { memorizedState: State } => {
+  // 返回的对象包裹着的memorizedState就是计算出的新state
   const result: ReturnType<typeof processUpdateQueue<State>> = {
     memorizedState: baseState
   };
